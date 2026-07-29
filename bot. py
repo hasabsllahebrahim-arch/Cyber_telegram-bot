@@ -1,0 +1,56 @@
+from telegram import Update
+from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
+import feedparser
+from googletrans import Translator
+
+# ضع الـ Token الخاص بك هنا
+BOT_TOKEN = "8994566238:AAE_1-UNkESNgm3B-FWjoaWgqWmq-I82w6Y"
+
+RSS_FEEDS = [
+    "https://feeds.feedburner.com/TheHackersNews",
+    "https://www.bleepingcomputer.com/feed/",
+    "https://krebsonsecurity.com/feed/",
+]
+
+sent_articles = set()
+translator = Translator()
+
+async def get_news(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("🔎 جاري جلب وترجمة أحدث الأخبار السيبرانية...")
+    
+    found_new = False
+    for feed_url in RSS_FEEDS:
+        feed = feedparser.parse(feed_url)
+        for entry in feed.entries[:2]:
+            if entry.link not in sent_articles:
+                original_title = entry.title
+                link = entry.link
+                
+                # ترجمة العنوان إلى العربية
+                try:
+                    translated_title = translator.translate(original_title, dest='ar').text
+                except Exception:
+                    translated_title = original_title  # في حال حدوث خطأ في الترجمة يُرسل النص الأصلي
+                
+                # صياغة الرسالة بالعربي والإنجليزي
+                msg = (
+                    f"🚨 *خبر سيبراني جديد*\n\n"
+                    f"📌 *العنوان (مترجم):*\n{translated_title}\n\n"
+                    f"📝 *العنوان الأصلي:*\n{original_title}\n\n"
+                    f"🔗 {link}"
+                )
+                
+                await update.message.reply_text(msg, parse_mode="Markdown")
+                sent_articles.add(link)
+                found_new = True
+
+    if not found_new:
+        await update.message.reply_text("✅ لا توجد أخبار جديدة حالياً.")
+
+if __name__ == '__main__':
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
+    app.add_handler(CommandHandler("start", get_news))
+    app.add_handler(CommandHandler("news", get_news))
+    
+    print("البوت جاهز مع خدمة الترجمة...")
+    app.run_polling()
